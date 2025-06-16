@@ -84,12 +84,12 @@ async function fetchDominanceViaAPI() {
     const usdt = await axios.get('https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=USDT', {
       headers: { 'X-CMC_PRO_API_KEY': cmcKey },
     })
-    const usdtDom = (usdt.data.data.USDT.quote.USD.market_cap / d.total_market_cap) * 100
-    const total3 = d.total_market_cap * (1 - (d.btc_dominance + d.eth_dominance) / 100)
+    const totalMarketCap = d.quote.USD.total_market_cap
+    const total3 = totalMarketCap * (1 - (d.btc_dominance + d.eth_dominance) / 100)
     return {
-      btcD: { total: d.btc_dominance, change: '' },
-      usdtD: { total: usdtDom, change: '' },
-      total3: { total: total3 / 1e9, change: '' },
+      btcD: { total: d.btc_dominance.toFixed(2), change: '' },
+      usdtD: { total: usdt.quote.USD.market_cap_dominance.toFixed(2), change: '' },
+      total3: { total: (total3 / 1e9).toFixed(2), change: '' },
     }
   } catch (err) {
     console.warn('Fallo CoinMarketCap. Usando CoinGecko...', err.message)
@@ -208,65 +208,50 @@ async function checkMarketConditions() {
   const { btcD, usdtD, total3 } = await fetchIndicators()
   const results = await Promise.all(TOKENS.map(analyzeToken))
   const valid = results.filter((r) => r)
-  let mensaje = `📊 *Alerta de Mercado*
 
-`
-  mensaje += `BTC Dominance: ${btcD?.total ?? 'N/A'}% ${btcD?.change ?? ''}
-`
-  mensaje += `USDT Dominance: ${usdtD?.total ?? 'N/A'}% ${usdtD?.change ?? ''}
-`
-  mensaje += `TOTAL3: $${total3?.total ?? 'N/A'}B ${total3?.change ?? ''}
+  let mensajeBase = `📊 *Alerta de Mercado*\n\n`
+  mensajeBase += `BTC Dominance: ${btcD?.total ?? 'N/A'}% ${btcD?.change ?? ''}\n`
+  mensajeBase += `USDT Dominance: ${usdtD?.total ?? 'N/A'}% ${usdtD?.change ?? ''}\n`
+  mensajeBase += `TOTAL3: $${total3?.total ?? 'N/A'}B ${total3?.change ?? ''}\n\n`
 
-`
   if (usdtD?.total < 4.5 && btcD?.total < 50 && total3?.total > 300) {
-    mensaje += `🚀 Señal: Posible flujo hacia altcoins.
-`
+    mensajeBase += `🚀 Señal: Posible flujo hacia altcoins.\n`
   } else if (usdtD?.total > 4.7) {
-    mensaje += `⚠️ Señal: Aversión al riesgo. Considerar reducir exposición.
-`
+    mensajeBase += `⚠️ Señal: Aversión al riesgo. Considerar reducir exposición.\n`
   } else {
-    mensaje += `🔄 Mercado indeciso. A la espera de confirmación.
-`
+    mensajeBase += `🔄 Mercado indeciso. A la espera de confirmación.\n`
   }
 
-  if (valid.length === 0) {
-    mensaje += `Sin señales técnicas activas en este momento.`
-  } else {
-    for (const data of valid) {
-      await new Promise((resolve) => {
-        alertRecentlySent(data.symbol, data.direction, (err, exists) => {
-          if (err) {
-            console.error('Error verificando SQLite:', err.message)
-            return resolve()
-          }
-          if (!exists) {
-            mensaje += `
-✨ *${data.symbol}USDT* — ${data.direction}
-`
-            mensaje += `• Precio: $${data.currentPrice}
-`
-            mensaje += `• RSI: ${data.rsi?.toFixed(2) ?? 'N/A'}
-`
-            mensaje += `• EMA50: $${data.ema50?.toFixed(2) ?? 'N/A'}
-`
-            mensaje += `• EMA200: $${data.ema200?.toFixed(2) ?? 'N/A'}
-`
-            mensaje += `• Bollinger: [${data.boll?.lower?.toFixed(2) ?? 'N/A'} - ${data.boll?.upper?.toFixed(2) ?? 'N/A'}]
-`
-            mensaje += `• ATR: $${data.atr?.toFixed(3) ?? 'N/A'}
-`
-            mensaje += `📥 Entrada ideal: ${data.entryZone}
-`
-            mensaje += `🎯 TP: $${data.takeProfit} | 🛑 SL: $${data.stopLoss} | ⚖️ RR: ${data.rr}
-`
-            insertAlert(data)
-          }
-          resolve()
-        })
+  let mensajeFinal = mensajeBase
+  let nuevasAlertas = 0
+
+  for (const data of valid) {
+    await new Promise((resolve) => {
+      alertRecentlySent(data.symbol, data.direction, (err, exists) => {
+        if (err) {
+          console.error('Error verificando SQLite:', err.message)
+          return resolve()
+        }
+        if (!exists) {
+          mensajeFinal += `\n✨ *${data.symbol}USDT* — ${data.direction}\n`
+          mensajeFinal += `• Precio: $${data.currentPrice}\n`
+          mensajeFinal += `• RSI: ${data.rsi?.toFixed(2) ?? 'N/A'}\n`
+          mensajeFinal += `• EMA50: $${data.ema50?.toFixed(2) ?? 'N/A'}\n`
+          mensajeFinal += `• EMA200: $${data.ema200?.toFixed(2) ?? 'N/A'}\n`
+          mensajeFinal += `• Bollinger: [${data.boll?.lower?.toFixed(2) ?? 'N/A'} - ${data.boll?.upper?.toFixed(2) ?? 'N/A'}]\n`
+          mensajeFinal += `• ATR: $${data.atr?.toFixed(3) ?? 'N/A'}\n`
+          mensajeFinal += `📥 Entrada ideal: ${data.entryZone}\n`
+          mensajeFinal += `🎯 TP: $${data.takeProfit} | 🛑 SL: $${data.stopLoss} | ⚖️ RR: ${data.rr}\n`
+          insertAlert(data)
+          nuevasAlertas++
+        }
+        resolve()
       })
-    }
+    })
   }
-  bot.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' })
+  if (nuevasAlertas > 0) {
+    bot.sendMessage(chatId, mensajeFinal, { parse_mode: 'Markdown' })
+  }
 }
 
 checkMarketConditions()
