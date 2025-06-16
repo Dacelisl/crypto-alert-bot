@@ -1,12 +1,23 @@
-// crypto-alert-bot/index.js
 require('dotenv').config()
 const axios = require('axios')
 const puppeteer = require('puppeteer')
+const express = require('express')
+const app = express()
 const TelegramBot = require('node-telegram-bot-api')
 const { RSI, EMA, BollingerBands, ATR } = require('technicalindicators')
 const { insertAlert, alertRecentlySent } = require('./db')
 
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true })
+const PORT = process.env.PORT || 3000
+const BASE_URL = process.env.BASE_URL
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN)
+bot.setWebHook(`${BASE_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`)
+
+app.use(express.json())
+app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
+  bot.processUpdate(req.body)
+  res.sendStatus(200)
+})
+
 const chatId = process.env.TELEGRAM_CHAT_ID
 const TOKENS = [
   'SUI',
@@ -254,5 +265,8 @@ async function checkMarketConditions() {
   }
 }
 
-checkMarketConditions()
-setInterval(checkMarketConditions, 15 * 60 * 1000)
+app.listen(PORT, () => {
+  console.log(`🚀 Webhook server activo en puerto ${PORT}`)
+  checkMarketConditions()
+  setInterval(checkMarketConditions, 15 * 60 * 1000)
+})
