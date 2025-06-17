@@ -1,6 +1,6 @@
 // db.js
 const sqlite3 = require('sqlite3').verbose()
-const db = new sqlite3.Database('./alerts.db')
+const db = new sqlite3.Database('./queries.db')
 
 // Crear tabla si no existe
 db.serialize(() => {
