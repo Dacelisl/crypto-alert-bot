@@ -1,7 +1,9 @@
 const axios = require('axios')
-const { RSI, MACD, OBV, MFI } = require('@thuantan2060/technicalindicators')
+const { RSI, MACD, OBV, MFI } = require('technicalindicators')
 
 async function getCryptoTradeSignal(symbol, interval, usdtDominance) {
+  console.log('token: ', symbol)
+
   const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=300`
 
   try {

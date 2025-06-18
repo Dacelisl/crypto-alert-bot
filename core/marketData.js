@@ -47,6 +47,7 @@ async function fetchDominanceViaAPI() {
     const usdtData = usdt.data.data.USDT
     const totalMarketCap = d.quote.USD.total_market_cap
     const total3 = totalMarketCap * (1 - (d.btc_dominance + d.eth_dominance) / 100)
+
     return {
       btcD: { total: d.btc_dominance.toFixed(2), change: '' },
       usdtD: { total: usdtData.quote.USD.market_cap_dominance.toFixed(2), change: '' },

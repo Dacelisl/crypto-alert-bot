@@ -1,10 +1,12 @@
 const { insertAlert, alertRecentlySent } = require('../db/db')
 const { getCryptoTradeSignal } = require('../core/tradeSignal')
+const { analyzeToken } = require('../core/tradeSignal2')
 const { fetchIndicators } = require('../core/marketData')
 const { TOKENS } = require('../config/tokens')
 
 async function checkMarketConditions(bot) {
   const { btcD, usdtD, total3 } = await fetchIndicators()
+
   let mensajeBase = `📊 *Alerta de Mercado*\n\n`
   mensajeBase += `BTC Dominance: ${btcD?.total ?? 'N/A'}% ${btcD?.change ?? ''}\n`
   mensajeBase += `USDT Dominance: ${usdtD?.total ?? 'N/A'}% ${usdtD?.change ?? ''}\n`
@@ -20,7 +22,9 @@ async function checkMarketConditions(bot) {
   let nuevasAlertas = 0
 
   for (const token of TOKENS) {
-    const signal = await getCryptoTradeSignal(token, '15m', usdtD.total)
+    /*  const signal = await getCryptoTradeSignal(token, '30m', usdtD.total) */
+    const signal = await analyzeToken(token, '15m')
+
     if (signal.trade_type === 'LONG' || signal.trade_type === 'SHORT') {
       await new Promise((resolve) => {
         alertRecentlySent(token, signal.trade_type, (err, exists) => {
@@ -31,14 +35,9 @@ async function checkMarketConditions(bot) {
           if (!exists) {
             mensajeBase += `\n✨ *${token}USDT* — ${signal.trade_type}\n`
             mensajeBase += `• Precio: $${signal.current_price.toFixed(4)}\n`
-            mensajeBase += `• RSI: ${signal.indicators.rsi?.toFixed(2) ?? 'N/A'}\n`
-            mensajeBase += `• MACD: ${signal.indicators.macdLine?.toFixed(4) ?? 'N/A'}\n`
-            mensajeBase += `• Signal: ${signal.indicators.signalLine?.toFixed(4) ?? 'N/A'}\n`
-            mensajeBase += `• OBV: ${signal.indicators.obv?.toFixed(2) ?? 'N/A'}\n`
-            mensajeBase += `• MFI: ${signal.indicators.mfi?.toFixed(2) ?? 'N/A'}\n`
-            mensajeBase += `• Dominancia USDT: ${signal.indicators.usdtDominance}%\n`
-            mensajeBase += `📥 Entrada: $${signal.entry_price.toFixed(4)}\n`
-            mensajeBase += `🎯 TP: $${signal.take_profit.toFixed(4)} | 🛑 SL: $${signal.stop_loss.toFixed(4)}\n`
+            mensajeBase += `📥 Entrada: $${signal.entry_price}\n`
+            mensajeBase += `🎯 TP: $${signal.take_profit}\n`
+            mensajeBase += `🛑 SL: $${signal.stop_loss}\n\n`
             insertAlert({ symbol: token, direction: signal.trade_type })
             nuevasAlertas++
           }
