@@ -1,11 +1,13 @@
 const { insertAlert, alertRecentlySent } = require('../db/db')
 const { getCryptoTradeSignal } = require('../core/tradeSignal')
+const { getSocketData } = require('../core/tradingviewSocket')
 const { analyzeToken } = require('../core/tradeSignal2')
 const { fetchIndicators } = require('../core/marketData')
 const { TOKENS } = require('../config/tokens')
 
 async function checkMarketConditions(bot) {
-  const { btcD, usdtD, total3 } = await fetchIndicators()
+  /* const { btcD, usdtD, total3 } = await fetchIndicators() */
+  const { btcD, usdtD, total3 } = await getSocketData()
 
   let mensajeBase = `📊 *Alerta de Mercado*\n\n`
   mensajeBase += `BTC Dominance: ${btcD?.total ?? 'N/A'}% ${btcD?.change ?? ''}\n`
