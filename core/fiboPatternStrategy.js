@@ -26,8 +26,6 @@ function getFibonacciLevels(low, high) {
 }
 
 async function analyzeToken(symbol, interval) {
-  console.log('Analizando token:', symbol, 'en intervalo:', interval)
-
   try {
     const klines = await fetchKlines(symbol, interval)
     const closes = klines.map((c) => c.close)
@@ -48,7 +46,6 @@ async function analyzeToken(symbol, interval) {
 
     const [prev, curr] = klines.slice(-2)
     const pattern = detectCandlePattern(prev, curr)
-    console.log('Patrón detectado:', pattern)
 
     const swingHigh = Math.max(...closes.slice(-50))
     const swingLow = Math.min(...closes.slice(-50))
@@ -71,14 +68,6 @@ async function analyzeToken(symbol, interval) {
     const longEntry = longConditions.every(Boolean)
     const shortEntry = shortConditions.every(Boolean)
 
-    const patternValid = pattern?.includes('bullish' || 'bearish')
-    const nearFib = nearFiboLevel
-    const volumeOK = currentVolume > avgVolume
-    const rsiOK = latest.rsi > 35 && latest.rsi < 65
-
-    console.log({ patternValid, nearFib, volumeOK, rsiOK })
-    console.log('position:', longEntry, shortEntry)
-
     if (!longEntry && !shortEntry) return 'NONE'
 
     const direction = longEntry ? 'LONG' : 'SHORT'
@@ -88,6 +77,7 @@ async function analyzeToken(symbol, interval) {
 
     const entryMin = longEntry ? (currentPrice * 0.995).toFixed(3) : (currentPrice * 1.005).toFixed(3)
     const entryMax = longEntry ? (currentPrice * 1.002).toFixed(3) : (currentPrice * 0.998).toFixed(3)
+    const rr = Math.abs((tp - currentPrice) / (currentPrice - sl))
 
     return {
       symbol,
@@ -100,7 +90,7 @@ async function analyzeToken(symbol, interval) {
       direction,
       indicators: latest,
       pattern,
-      /* rr: rr.toFixed(2), */
+      rr: rr.toFixed(2),
       status: 'pending',
       hit_time: null,
     }

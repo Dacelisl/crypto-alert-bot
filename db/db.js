@@ -24,7 +24,7 @@ function insertAlert(alert) {
   console.log('💾 Guardando alerta en DB:', alert.symbol, alert.direction)
   const stmt = db.prepare(`
     INSERT INTO alerts (symbol, direction, current_price, take_profit, stop_loss, rr,timestamp, status, hit_time)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?,?)
   `)
   stmt.run(alert.symbol, alert.direction, alert.currentPrice, alert.takeProfit, alert.stopLoss, alert.rr, alert.timestamp, alert.status || 'pending', alert.hit_time || null)
   stmt.finalize()
