@@ -19,7 +19,7 @@ async function getCryptoTradeSignal(symbol, interval, usdtDominance) {
     const indicators = await Promise.all([computeIndicators(highs, lows, closes, volumes)])
     const tradeType = evaluateSignal(indicators, usdtDominance)
 
-    if (tradeType === 'NONE') return { trade_type: 'NONE' }
+    if (tradeType === 'NONE') return { direction: 'NONE' }
 
     const sl = tradeType === 'LONG' ? currentPrice * 0.97 : currentPrice * 1.03
     const tp = tradeType === 'LONG' ? currentPrice + 2 * (currentPrice - sl) : currentPrice - 2 * (sl - currentPrice)
@@ -29,12 +29,12 @@ async function getCryptoTradeSignal(symbol, interval, usdtDominance) {
       entry_price: currentPrice,
       take_profit: tp,
       stop_loss: sl,
-      trade_type: tradeType,
+      direction: tradeType,
       indicators: { ...indicators, usdtDominance },
     }
   } catch (err) {
     console.error(`❌ ${symbol} error:`, err.message)
-    return { trade_type: 'NONE', error: err.message }
+    return { direction: 'NONE', error: err.message }
   }
 }
 

@@ -47,7 +47,7 @@ async function analyzeToken(symbol, interval) {
 
     if (!longEntry && !shortEntry) return 'NONE'
 
-    const trade_type = longEntry ? 'LONG' : 'SHORT'
+    const direction = longEntry ? 'LONG' : 'SHORT'
     const tp = longEntry ? currentPrice + latest.atr * 3 : currentPrice - latest.atr * 3
     const sl = longEntry ? currentPrice - latest.atr * 2 : currentPrice + latest.atr * 2
     const rr = Math.abs((tp - currentPrice) / (currentPrice - sl))
@@ -62,7 +62,7 @@ async function analyzeToken(symbol, interval) {
       entry_price: `[${entryMin} - ${entryMax}]`,
       take_profit: tp.toFixed(3),
       stop_loss: sl.toFixed(3),
-      trade_type: trade_type,
+      direction: direction,
       indicators: { ...latest },
     }
   } catch (err) {

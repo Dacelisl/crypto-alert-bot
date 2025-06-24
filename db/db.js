@@ -2,17 +2,16 @@ const sqlite3 = require('sqlite3').verbose()
 const path = require('path')
 const db = new sqlite3.Database(path.join(__dirname, 'queries.db'))
 
-// Crear tabla si no existe con campos extendidos
 const createTableQuery = `
   CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol TEXT,
     direction TEXT,
-    price REAL,
-    tp REAL,
-    sl REAL,
+    current_price REAL,
+    take_profit REAL,
+    stop_loss REAL,
     rr REAL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    timestamp TEXT,
     status TEXT DEFAULT 'pending',
     hit_time TEXT
   )`
@@ -24,10 +23,10 @@ db.serialize(() => {
 function insertAlert(alert) {
   console.log('💾 Guardando alerta en DB:', alert.symbol, alert.direction)
   const stmt = db.prepare(`
-    INSERT INTO alerts (symbol, direction, price, tp, sl, rr, status, hit_time)
+    INSERT INTO alerts (symbol, direction, current_price, take_profit, stop_loss, rr,timestamp, status, hit_time)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `)
-  stmt.run(alert.symbol, alert.direction, alert.currentPrice, alert.takeProfit, alert.stopLoss, alert.rr, alert.status || 'pending', alert.hit_time || null)
+  stmt.run(alert.symbol, alert.direction, alert.currentPrice, alert.takeProfit, alert.stopLoss, alert.rr, alert.timestamp, alert.status || 'pending', alert.hit_time || null)
   stmt.finalize()
 }
 

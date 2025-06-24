@@ -6,36 +6,36 @@ db.run(`CREATE TABLE IF NOT EXISTS signals (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   symbol TEXT,
   interval TEXT,
-  trade_type TEXT,
+  direction TEXT,
   pattern TEXT,
   current_price REAL,
   entry_min REAL,
   entry_max REAL,
   take_profit REAL,
   stop_loss REAL,
-  created_at TEXT,
-  status TEXT DEFAULT 'pending'
+  timestamp TEXT,
+  status TEXT DEFAULT 'pending',
+  hit_time TEXT
 )`)
 
 function saveSignal(signal) {
   const stmt = db.prepare(`
-    INSERT INTO signals (symbol, interval, trade_type, pattern, current_price, entry_min, entry_max, take_profit, stop_loss, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO signals (symbol, interval, direction, pattern, current_price, entry_min, entry_max, take_profit, stop_loss, timestamp, hit_time,status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
-  const entryMin = parseFloat(signal.entry_price.replace(/\[|\]/g, '').split(' - ')[0])
-  const entryMax = parseFloat(signal.entry_price.replace(/\[|\]/g, '').split(' - ')[1])
-
   stmt.run(
     signal.symbol,
     signal.interval,
-    signal.trade_type,
+    signal.direction,
     signal.pattern,
     signal.current_price,
-    entryMin,
-    entryMax,
-    parseFloat(signal.take_profit),
-    parseFloat(signal.stop_loss),
-    new Date().toISOString(),
+    signal.entry_min,
+    signal.entry_max,
+    signal.take_profit,
+    signal.stop_loss,
+    signal.timestamp,
+    signal.hit_time,
+    signal.status,
   )
 }
 
@@ -48,9 +48,19 @@ function updateSignalStatus(id, status) {
   const stmt = db.run(`UPDATE signals SET status = ? WHERE id = ?`)
   stmt.run(status, id)
 }
+function updateSignalStatusByDetails({ symbol, direction, timestamp, status, hit_time }) {
+  const stmt = db.prepare(`
+    UPDATE signals
+    SET status = ?, hit_time = ?
+    WHERE symbol = ? AND trade_type = ? AND timestamp = ?
+  `)
+  stmt.run(status, hit_time, symbol, direction, timestamp)
+  stmt.finalize()
+}
 
 module.exports = {
   saveSignal,
   getPendingSignals,
   updateSignalStatus,
+  updateSignalStatusByDetails,
 }

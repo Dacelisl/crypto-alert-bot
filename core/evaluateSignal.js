@@ -1,5 +1,6 @@
 const axios = require('axios')
 const { getPendingAlerts, updateAlertStatus } = require('../db/db')
+const { updateSignalStatusByDetails } = require('../db/history/signalStore')
 const parseInterval = (interval) => {
   const unit = interval.slice(-1)
   const value = parseInt(interval)
@@ -50,20 +51,20 @@ async function evaluateSignals() {
 
         for (const p of prices) {
           if (alert.direction === 'LONG') {
-            if (p >= alert.tp) {
+            if (p >= alert.take_profit) {
               hit = 'tp_hit'
               break
             }
-            if (p <= alert.sl) {
+            if (p <= alert.stop_loss) {
               hit = 'sl_hit'
               break
             }
           } else {
-            if (p <= alert.tp) {
+            if (p <= alert.take_profit) {
               hit = 'tp_hit'
               break
             }
-            if (p >= alert.sl) {
+            if (p >= alert.stop_loss) {
               hit = 'sl_hit'
               break
             }
@@ -71,7 +72,16 @@ async function evaluateSignals() {
         }
 
         if (hit) {
-          updateAlertStatus(alert.id, hit, new Date().toISOString())
+          const date = new Date().toISOString()
+          updateAlertStatus(alert.id, hit, date)
+          updateSignalStatusByDetails({
+            symbol: alert.symbol,
+            direction: alert.direction,
+            timestamp: alert.timestamp,
+            status: hit,
+            hit_time: date,
+          })
+
           console.log(`📌 ${alert.symbol} → ${hit.toUpperCase()}`)
         } else {
           console.log(`⏳ ${alert.symbol} sigue abierta`)

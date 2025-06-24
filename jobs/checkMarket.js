@@ -1,10 +1,12 @@
 const { insertAlert, alertRecentlySent } = require('../db/db')
-const { getCryptoTradeSignal } = require('../core/tradeSignal')
+/* const { getCryptoTradeSignal } = require('../core/tradeSignal') */
 const { getSocketData } = require('../core/tradingviewSocket')
-const { analyzeToken } = require('../core/tradeSignal2')
-const { fetchIndicators } = require('../core/marketData')
+/* const { analyzeToken } = require('../core/tradeSignal2')
+const { fetchIndicators } = require('../core/marketData') */
+const { analyzeToken } = require('../core/fiboPatternStrategy')
+const { saveSignal } = require('../db/history/signalStore')
 const { TOKENS } = require('../config/tokens')
-
+const interval = '5m'
 async function checkMarketConditions(bot) {
   /* const { btcD, usdtD, total3 } = await fetchIndicators() */
   const { btcD, usdtD, total3 } = await getSocketData()
@@ -25,22 +27,44 @@ async function checkMarketConditions(bot) {
 
   for (const token of TOKENS) {
     /*  const signal = await getCryptoTradeSignal(token, '30m', usdtD.total) */
-    const signal = await analyzeToken(token, '15m')
+    const signal = await analyzeToken(token, interval)
 
-    if (signal.trade_type === 'LONG' || signal.trade_type === 'SHORT') {
+    if (signal.direction === 'LONG' || signal.direction === 'SHORT') {
       await new Promise((resolve) => {
-        alertRecentlySent(token, signal.trade_type, (err, exists) => {
+        alertRecentlySent(token, signal.direction, (err, exists) => {
           if (err) {
             console.error('Error verificando SQLite:', err.message)
             return resolve()
           }
           if (!exists) {
-            mensajeBase += `\n✨ *${token}USDT* — ${signal.trade_type}\n`
-            mensajeBase += `• Precio: $${signal.current_price.toFixed(4)}\n`
-            mensajeBase += `📥 Entrada: $${signal.entry_price}\n`
+            const date = new Date().toISOString()
+            mensajeBase += `\n✨ *${token}USDT* — ${signal.direction}\n`
+            mensajeBase += `• Precio: $${signal.current_price}\n`
+            mensajeBase += `📥 Entrada: $${`[${signal.entry_min} - ${signal.entry_max}]`}\n`
             mensajeBase += `🎯 TP: $${signal.take_profit}\n`
             mensajeBase += `🛑 SL: $${signal.stop_loss}\n\n`
-            insertAlert({ symbol: token, direction: signal.trade_type })
+
+            const dataDefault = {
+              symbol: token,
+              direction: signal.direction,
+              current_price: signal.current_price,
+              take_profit: signal.take_profit,
+              stop_loss: signal.stop_loss,
+              timestamp: date,
+              status: signal.status,
+              hit_time: signal.hit_time,
+            }
+            insertAlert({
+              ...dataDefault,
+              rr: signal.rr,
+            })
+            saveSignal({
+              ...dataDefault,
+              entry_min: signal.entry_min,
+              entry_max: signal.entry_max,
+              pattern: signal.pattern,
+              interval: interval,
+            })
             nuevasAlertas++
           }
           resolve()

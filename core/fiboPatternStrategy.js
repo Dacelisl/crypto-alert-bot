@@ -26,6 +26,8 @@ function getFibonacciLevels(low, high) {
 }
 
 async function analyzeToken(symbol, interval) {
+  console.log('Analizando token:', symbol, 'en intervalo:', interval)
+
   try {
     const klines = await fetchKlines(symbol, interval)
     const closes = klines.map((c) => c.close)
@@ -46,6 +48,7 @@ async function analyzeToken(symbol, interval) {
 
     const [prev, curr] = klines.slice(-2)
     const pattern = detectCandlePattern(prev, curr)
+    console.log('Patrón detectado:', pattern)
 
     const swingHigh = Math.max(...closes.slice(-50))
     const swingLow = Math.min(...closes.slice(-50))
@@ -67,10 +70,11 @@ async function analyzeToken(symbol, interval) {
 
     const longEntry = longConditions.every(Boolean)
     const shortEntry = shortConditions.every(Boolean)
+    console.log('longentry:', longEntry, 'shortEntry:', shortEntry)
 
     if (!longEntry && !shortEntry) return 'NONE'
 
-    const trade_type = longEntry ? 'LONG' : 'SHORT'
+    const direction = longEntry ? 'LONG' : 'SHORT'
     const atrMult = latest.atr || 0.01
     const tp = longEntry ? currentPrice + atrMult * 3 : currentPrice - atrMult * 3
     const sl = longEntry ? currentPrice - atrMult * 2 : currentPrice + atrMult * 2
@@ -81,11 +85,12 @@ async function analyzeToken(symbol, interval) {
     return {
       symbol,
       interval,
-      current_price: currentPrice,
-      entry_price: `[${entryMin} - ${entryMax}]`,
+      current_price: currentPrice.toFixed(4),
+      entry_min: entryMin,
+      entry_max: entryMax,
       take_profit: tp.toFixed(3),
       stop_loss: sl.toFixed(3),
-      trade_type,
+      direction,
       indicators: latest,
       pattern,
       rr: rr.toFixed(2),
