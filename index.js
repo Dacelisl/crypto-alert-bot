@@ -20,16 +20,6 @@ app.get('/ping', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'pong' })
 })
 
-app.get('/report', async (req, res) => {
-  try {
-    const report = generateStatsReport({ returnAsText: true })
-    res.set('Content-Type', 'text/plain')
-    res.send(report)
-  } catch (err) {
-    res.status(500).send('Error generando reporte')
-  }
-})
-
 app.listen(PORT, () => {
   console.log(`🚀 Webhook server activo en puerto ${PORT}`)
   checkMarketConditions(bot)
@@ -38,4 +28,14 @@ app.listen(PORT, () => {
     evaluateSignals()
     generateStatsReport()
   }, 15 * 60 * 1000)
+})
+
+app.get('/report', async (req, res) => {
+  try {
+    const report = generateStatsReport({ returnAsText: true })
+    res.set('Content-Type', 'text/plain')
+    res.send(report)
+  } catch (err) {
+    res.status(500).send('Error generando reporte')
+  }
 })

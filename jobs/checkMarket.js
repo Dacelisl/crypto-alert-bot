@@ -6,7 +6,7 @@ const { fetchIndicators } = require('../core/marketData') */
 const { analyzeToken } = require('../core/fiboPatternStrategy')
 const { saveSignal } = require('../db/history/signalStore')
 const { TOKENS } = require('../config/tokens')
-const interval = '5m'
+const interval = '30m'
 async function checkMarketConditions(bot) {
   /* const { btcD, usdtD, total3 } = await fetchIndicators() */
   const { btcD, usdtD, total3 } = await getSocketData()

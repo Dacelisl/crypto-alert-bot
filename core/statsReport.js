@@ -1,5 +1,6 @@
 const sqlite3 = require('sqlite3').verbose()
-const db = new sqlite3.Database('../db/history/signals_history.sqlite')
+const path = require('path')
+const db = new sqlite3.Database(path.join(__dirname, '../db/history/signals_history.sqlite'))
 
 function generateStatsReport({ returnAsText = false } = {}) {
   const total = db.prepare('SELECT COUNT(*) as count FROM signals').get().count

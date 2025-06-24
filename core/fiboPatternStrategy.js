@@ -70,7 +70,13 @@ async function analyzeToken(symbol, interval) {
 
     const longEntry = longConditions.every(Boolean)
     const shortEntry = shortConditions.every(Boolean)
-    console.log('longentry:', longEntry, 'shortEntry:', shortEntry)
+
+    const patternValid = pattern?.includes('bullish')
+    const nearFib = nearFiboLevel
+    const volumeOK = currentVolume > avgVolume
+    const rsiOK = latest.rsi > 35 && latest.rsi < 65
+
+    console.log({ patternValid, nearFib, volumeOK, rsiOK })
 
     if (!longEntry && !shortEntry) return 'NONE'
 
