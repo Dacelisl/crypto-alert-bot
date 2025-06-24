@@ -6,7 +6,7 @@ const { fetchIndicators } = require('../core/marketData') */
 const { analyzeToken } = require('../core/fiboPatternStrategy')
 const { saveSignal } = require('../db/history/signalStore')
 const { TOKENS } = require('../config/tokens')
-const interval = '30m'
+const interval = '15m'
 async function checkMarketConditions(bot) {
   /* const { btcD, usdtD, total3 } = await fetchIndicators() */
   const { btcD, usdtD, total3 } = await getSocketData()
@@ -28,6 +28,7 @@ async function checkMarketConditions(bot) {
   for (const token of TOKENS) {
     /*  const signal = await getCryptoTradeSignal(token, '30m', usdtD.total) */
     const signal = await analyzeToken(token, interval)
+    console.log('data signal', signal)
 
     if (signal.direction === 'LONG' || signal.direction === 'SHORT') {
       await new Promise((resolve) => {
@@ -56,7 +57,7 @@ async function checkMarketConditions(bot) {
             }
             insertAlert({
               ...dataDefault,
-              rr: signal.rr,
+              /*    rr: signal.rr, */
             })
             saveSignal({
               ...dataDefault,

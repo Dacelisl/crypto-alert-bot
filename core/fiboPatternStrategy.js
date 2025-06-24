@@ -64,19 +64,20 @@ async function analyzeToken(symbol, interval) {
       atr: atr.at(-1),
     }
 
-    const longConditions = [latest.ema50 > latest.ema200, latest.rsi > 45 && latest.rsi < 60, currentPrice < latest.boll.lower, volConfirm, pattern && pattern.includes('bullish'), nearFiboLevel]
+    const longConditions = [latest.rsi > 45 && latest.rsi < 60, volConfirm, nearFiboLevel]
 
-    const shortConditions = [latest.ema50 < latest.ema200, latest.rsi < 55 && latest.rsi > 40, currentPrice > latest.boll.upper, volConfirm, pattern && pattern.includes('bearish'), nearFiboLevel]
+    const shortConditions = [latest.rsi < 55 && latest.rsi > 40, volConfirm, nearFiboLevel]
 
     const longEntry = longConditions.every(Boolean)
     const shortEntry = shortConditions.every(Boolean)
 
-    const patternValid = pattern?.includes('bullish')
+    const patternValid = pattern?.includes('bullish' || 'bearish')
     const nearFib = nearFiboLevel
     const volumeOK = currentVolume > avgVolume
     const rsiOK = latest.rsi > 35 && latest.rsi < 65
 
     console.log({ patternValid, nearFib, volumeOK, rsiOK })
+    console.log('position:', longEntry, shortEntry)
 
     if (!longEntry && !shortEntry) return 'NONE'
 
@@ -99,7 +100,7 @@ async function analyzeToken(symbol, interval) {
       direction,
       indicators: latest,
       pattern,
-      rr: rr.toFixed(2),
+      /* rr: rr.toFixed(2), */
       status: 'pending',
       hit_time: null,
     }

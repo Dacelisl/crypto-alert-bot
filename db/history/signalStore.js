@@ -1,6 +1,6 @@
 const sqlite3 = require('sqlite3').verbose()
 const path = require('path')
-const db = new sqlite3.Database(path.join(__dirname, '../db/history/signals_history.sqlite'))
+const db = new sqlite3.Database(path.join(__dirname, './signals_history.sqlite'))
 
 db.run(`CREATE TABLE IF NOT EXISTS signals (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
