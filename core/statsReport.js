@@ -49,7 +49,7 @@ function generateStatsReport({ returnAsText = false } = {}) {
                     output += `\n🎯 Entrada: [${row.entry_min} - ${row.entry_max}]`
                     output += `\n✅ TP: ${row.take_profit} | 🛑 SL: ${row.stop_loss}`
                     output += `\n📅 Fecha: ${row.timestamp}`
-                    output += `\n📌 Estado: ${row.status.toUpperCase()}${row.hit_time ? ` | 🎯 Finalizado: ${row.hit_time}` : ''}`
+                    output += `\n📌 Estado: ${row.status}${row.hit_time ? ` | 🎯 Finalizado: ${row.hit_time}` : ''}`
                   })
 
                   if (returnAsText) {

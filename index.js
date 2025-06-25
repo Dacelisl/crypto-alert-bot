@@ -4,11 +4,13 @@ const { createBot } = require('./services/telegramBot')
 const { checkMarketConditions } = require('./jobs/checkMarket')
 const { evaluateSignals } = require('./core/evaluateSignal')
 const { generateStatsReport } = require('./core/statsReport')
-
+const router = express.Router()
 const app = express()
 
 const PORT = process.env.PORT || 3000
 const bot = createBot(process.env.TELEGRAM_BOT_TOKEN, process.env.BASE_URL)
+
+app.use('/', router)
 
 app.use(express.json())
 app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
@@ -29,7 +31,7 @@ app.listen(PORT, () => {
   }, 15 * 60 * 1000)
 })
 
-app.get('/report', async (req, res) => {
+router.get('/report', async (req, res) => {
   try {
     const report = await generateStatsReport({ returnAsText: true })
     res.type('text/plain').send(report)

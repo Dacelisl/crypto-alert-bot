@@ -31,8 +31,6 @@ async function fetchCandles(symbol, interval, limit) {
 
 async function evaluateSignals() {
   getPendingSignals(async (err, alerts) => {
-    console.log('señales con estado pendiente', alerts.length)
-
     if (err) return console.error('Error obteniendo señales:', err)
 
     for (const alert of alerts) {
