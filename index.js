@@ -29,7 +29,7 @@ app.listen(PORT, () => {
   }, 15 * 60 * 1000)
 })
 
-router.get('/report', async (req, res) => {
+app.get('/report', async (req, res) => {
   try {
     const report = await generateStatsReport({ returnAsText: true })
     res.type('text/plain').send(report)

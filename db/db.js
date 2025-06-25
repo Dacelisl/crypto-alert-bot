@@ -1,4 +1,4 @@
-const db = require('./alertsDB')
+const db = require('./alertDB')
 
 db.run(`
   CREATE TABLE IF NOT EXISTS alerts (

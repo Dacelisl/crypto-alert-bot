@@ -20,8 +20,8 @@ db.run(`CREATE TABLE IF NOT EXISTS signals (
 function saveSignal(signal) {
   return new Promise((resolve, reject) => {
     const query = `
-      INSERT INTO signals (symbol, interval, direction, pattern, current_price, entry_min, entry_max, take_profit, stop_loss, timestamp, hit_time, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO signals (symbol, interval, direction, pattern, current_price, entry_min, entry_max, take_profit, stop_loss, timestamp, status,hit_time)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     db.run(
       query,
