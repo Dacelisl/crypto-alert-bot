@@ -1,8 +1,6 @@
-const sqlite3 = require('sqlite3').verbose()
-const path = require('path')
-const db = new sqlite3.Database(path.join(__dirname, '../db/queries.db'))
+const db = require('./alertsDB')
 
-const createTableQuery = `
+db.run(`
   CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol TEXT,
@@ -14,41 +12,48 @@ const createTableQuery = `
     timestamp TEXT,
     status TEXT DEFAULT 'pending',
     hit_time TEXT
-  )`
-
-db.serialize(() => {
-  db.run(createTableQuery)
-})
+  )
+`)
 
 function insertAlert(alert) {
-  console.log('💾 Guardando alerta en DB:', alert.symbol, alert.direction)
-  const stmt = db.prepare(`
-    INSERT INTO alerts (symbol, direction, current_price, take_profit, stop_loss, rr,timestamp, status, hit_time)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?,?)
-  `)
-  stmt.run(alert.symbol, alert.direction, alert.currentPrice, alert.takeProfit, alert.stopLoss, alert.rr, alert.timestamp, alert.status || 'pending', alert.hit_time || null)
-  stmt.finalize()
+  return new Promise((resolve, reject) => {
+    const query = `
+      INSERT INTO alerts (symbol, direction, current_price, take_profit, stop_loss, rr, timestamp, status, hit_time)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    db.run(
+      query,
+      [alert.symbol, alert.direction, alert.current_price, alert.take_profit, alert.stop_loss, alert.rr, alert.timestamp, alert.status || 'pending', alert.hit_time || null],
+      function (err) {
+        if (err) return reject(err)
+        resolve(this.lastID)
+      },
+    )
+  })
 }
 
 function alertRecentlySent(symbol, direction, callback) {
-  console.log('🔍 Consultando si ya existe alerta para:', symbol, direction)
-  db.get(`SELECT * FROM alerts WHERE symbol = ? AND direction = ? AND timestamp >= datetime('now', '-2 hours') ORDER BY timestamp DESC LIMIT 1`, [symbol, direction], (err, row) => {
+  const query = `
+    SELECT * FROM alerts
+    WHERE symbol = ? AND direction = ? AND timestamp >= datetime('now', '-2 hours')
+    ORDER BY timestamp DESC
+    LIMIT 1
+  `
+  db.get(query, [symbol, direction], (err, row) => {
     if (err) return callback(err, null)
     callback(null, !!row)
   })
 }
 
 function getPendingAlerts(callback) {
-  db.all(`SELECT * FROM alerts WHERE status = 'pending'`, [], (err, rows) => {
-    if (err) return callback(err, null)
-    callback(null, rows)
-  })
+  db.all(`SELECT * FROM alerts WHERE status = 'pending'`, [], callback)
 }
 
-function updateAlertStatus(id, status, hit_time = null) {
-  const stmt = db.prepare(`UPDATE alerts SET status = ?, hit_time = ? WHERE id = ?`)
-  stmt.run(status, hit_time, id)
-  stmt.finalize()
+function updateAlertStatus({ symbol, direction, timestamp, status, hit_time }) {
+  const query = `UPDATE alerts SET status = ?, hit_time = ? WHERE symbol = ? AND direction = ? AND timestamp = ?`
+  db.run(query, [status, hit_time, symbol, direction, timestamp], (err) => {
+    if (err) console.error('❌ Error actualizando alerta:', err.message)
+  })
 }
 
 module.exports = {
@@ -56,5 +61,4 @@ module.exports = {
   alertRecentlySent,
   getPendingAlerts,
   updateAlertStatus,
-  db,
 }

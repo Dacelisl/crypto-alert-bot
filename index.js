@@ -26,16 +26,15 @@ app.listen(PORT, () => {
   setInterval(() => {
     checkMarketConditions(bot)
     evaluateSignals()
-    generateStatsReport()
   }, 15 * 60 * 1000)
 })
 
-app.get('/report', async (req, res) => {
+router.get('/report', async (req, res) => {
   try {
-    const report = generateStatsReport({ returnAsText: true })
-    res.set('Content-Type', 'text/plain')
-    res.send(report)
+    const report = await generateStatsReport({ returnAsText: true })
+    res.type('text/plain').send(report)
   } catch (err) {
-    res.status(500).send('Error generando reporte')
+    console.error('❌ Error en /report:', err.message)
+    res.status(500).json({ error: 'Error generando reporte' })
   }
 })

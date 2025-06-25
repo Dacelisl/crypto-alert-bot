@@ -1,6 +1,6 @@
 const axios = require('axios')
-const { getPendingAlerts, updateAlertStatus } = require('../db/db')
-const { updateSignalStatusByDetails } = require('../db/history/signalStore')
+const { updateAlertStatus } = require('../db/db')
+const { updateSignalStatusByDetails, getPendingSignals } = require('../db/history/signalStore')
 const parseInterval = (interval) => {
   const unit = interval.slice(-1)
   const value = parseInt(interval)
@@ -14,15 +14,6 @@ const parseInterval = (interval) => {
     default:
       return 15 * 60 * 1000 // fallback 15m
   }
-}
-
-function getIntervalForSymbol(direction) {
-  // Ajustar por dirección si se necesita distinguir intervalos
-  return direction === 'LONG' || direction === 'SHORT' ? '15m' : '15m'
-}
-
-function getTimeframeSymbol(interval) {
-  return interval
 }
 
 function calculateCandlesSince(timestamp, interval) {
@@ -39,11 +30,13 @@ async function fetchCandles(symbol, interval, limit) {
 }
 
 async function evaluateSignals() {
-  getPendingAlerts(async (err, alerts) => {
+  getPendingSignals(async (err, alerts) => {
+    console.log('señales con estado pendiente', alerts.length)
+
     if (err) return console.error('Error obteniendo señales:', err)
 
     for (const alert of alerts) {
-      const interval = getIntervalForSymbol(alert.direction)
+      const interval = alert.interval
       const candlesNeeded = calculateCandlesSince(alert.timestamp, interval)
       try {
         const prices = await fetchCandles(alert.symbol, interval, candlesNeeded)
@@ -73,11 +66,9 @@ async function evaluateSignals() {
 
         if (hit) {
           const date = new Date().toISOString()
-          updateAlertStatus(alert.id, hit, date)
+          updateAlertStatus({ symbol: alert.symbol, direction: alert.direction, timestamp: alert.timestamp, status: hit, hit_time: date })
           updateSignalStatusByDetails({
-            symbol: alert.symbol,
-            direction: alert.direction,
-            timestamp: alert.timestamp,
+            id: alert.id,
             status: hit,
             hit_time: date,
           })

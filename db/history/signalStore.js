@@ -1,7 +1,6 @@
-const sqlite3 = require('sqlite3').verbose()
-const path = require('path')
-const db = new sqlite3.Database(path.join(__dirname, './signals_history.sqlite'))
+const db = require('./signalsDB')
 
+// Crear tabla si no existe
 db.run(`CREATE TABLE IF NOT EXISTS signals (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   symbol TEXT,
@@ -19,48 +18,48 @@ db.run(`CREATE TABLE IF NOT EXISTS signals (
 )`)
 
 function saveSignal(signal) {
-  const stmt = db.prepare(`
-    INSERT INTO signals (symbol, interval, direction, pattern, current_price, entry_min, entry_max, take_profit, stop_loss, timestamp, hit_time,status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  stmt.run(
-    signal.symbol,
-    signal.interval,
-    signal.direction,
-    signal.pattern,
-    signal.current_price,
-    signal.entry_min,
-    signal.entry_max,
-    signal.take_profit,
-    signal.stop_loss,
-    signal.timestamp,
-    signal.hit_time,
-    signal.status,
-  )
+  return new Promise((resolve, reject) => {
+    const query = `
+      INSERT INTO signals (symbol, interval, direction, pattern, current_price, entry_min, entry_max, take_profit, stop_loss, timestamp, hit_time, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    db.run(
+      query,
+      [
+        signal.symbol,
+        signal.interval,
+        signal.direction,
+        signal.pattern,
+        signal.current_price,
+        signal.entry_min,
+        signal.entry_max,
+        signal.take_profit,
+        signal.stop_loss,
+        signal.timestamp,
+        signal.hit_time,
+        signal.status,
+      ],
+      function (err) {
+        if (err) return reject(err)
+        resolve(this.lastID)
+      },
+    )
+  })
 }
 
-function getPendingSignals() {
-  const stmt = db.get(`SELECT * FROM signals WHERE status = 'pending'`)
-  return stmt.all()
+function getPendingSignals(callback) {
+  db.all(`SELECT * FROM signals WHERE status = 'pending'`, [], callback)
 }
 
-function updateSignalStatus(id, status) {
-  const stmt = db.run(`UPDATE signals SET status = ? WHERE id = ?`)
-  stmt.run(status, id)
-}
-function updateSignalStatusByDetails({ symbol, direction, timestamp, status, hit_time }) {
-  const stmt = db.prepare(`
-    UPDATE signals
-    SET status = ?, hit_time = ?
-    WHERE symbol = ? AND trade_type = ? AND timestamp = ?
-  `)
-  stmt.run(status, hit_time, symbol, direction, timestamp)
-  stmt.finalize()
+function updateSignalStatusByDetails({ id, status, hit_time }) {
+  const query = `UPDATE signals SET status = ?, hit_time = ? WHERE id = ?`
+  db.run(query, [status, hit_time, id], (err) => {
+    if (err) console.error('❌ Error actualizando señal:', err.message)
+  })
 }
 
 module.exports = {
   saveSignal,
   getPendingSignals,
-  updateSignalStatus,
   updateSignalStatusByDetails,
 }
