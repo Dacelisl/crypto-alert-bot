@@ -4,6 +4,7 @@ const { createBot } = require('./services/telegramBot')
 const { checkMarketConditions } = require('./jobs/checkMarket')
 const { evaluateSignals } = require('./core/evaluateSignal')
 const { generateStatsReport } = require('./core/statsReport')
+const { updateStatus } = require('./db/history/signalStore')
 const router = express.Router()
 const app = express()
 
@@ -27,12 +28,12 @@ app.listen(PORT, () => {
   checkMarketConditions(bot)
   setInterval(() => {
     checkMarketConditions(bot)
-    evaluateSignals()
   }, 15 * 60 * 1000)
 })
 
 router.get('/report', async (req, res) => {
   try {
+    updateStatus()
     await evaluateSignals()
     const report = await generateStatsReport({ returnAsText: true })
     res.type('text/plain').send(report)

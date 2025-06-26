@@ -55,6 +55,18 @@ function getPendingSignals() {
     })
   })
 }
+function updateStatus() {
+  db.run(`UPDATE signals SET status = 'pending' WHERE status IS NULL`, function (err) {
+    if (err) {
+      console.error('❌ Error actualizando registros:', err.message)
+    } else {
+      console.log(`✅ Registros actualizados: ${this.changes}`)
+    }
+    db.close(() => {
+      console.log('📦 Base de datos cerrada.')
+    })
+  })
+}
 
 function updateSignalStatusByDetails({ id, status, hit_time }) {
   const query = `UPDATE signals SET status = ?, hit_time = ? WHERE id = ?`
@@ -67,4 +79,5 @@ module.exports = {
   saveSignal,
   getPendingSignals,
   updateSignalStatusByDetails,
+  updateStatus,
 }
