@@ -21,14 +21,10 @@ function insertAlert(alert) {
       INSERT INTO alerts (symbol, direction, current_price, take_profit, stop_loss, rr, timestamp, status, hit_time)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
-    db.run(
-      query,
-      [alert.symbol, alert.direction, alert.current_price, alert.take_profit, alert.stop_loss, alert.rr, alert.timestamp, alert.status || 'pending', alert.hit_time || null],
-      function (err) {
-        if (err) return reject(err)
-        resolve(this.lastID)
-      },
-    )
+    db.run(query, [alert.symbol, alert.direction, alert.current_price, alert.take_profit, alert.stop_loss, alert.rr, alert.timestamp, alert.status, alert.hit_time], function (err) {
+      if (err) return reject(err)
+      resolve(this.lastID)
+    })
   })
 }
 

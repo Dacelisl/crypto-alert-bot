@@ -47,8 +47,13 @@ function saveSignal(signal) {
   })
 }
 
-function getPendingSignals(callback) {
-  db.all(`SELECT * FROM signals WHERE status = 'pending'`, [], callback)
+function getPendingSignals() {
+  return new Promise((resolve, reject) => {
+    db.all(`SELECT * FROM signals WHERE status = 'pending'`, [], (err, rows) => {
+      if (err) return reject(err)
+      resolve(rows)
+    })
+  })
 }
 
 function updateSignalStatusByDetails({ id, status, hit_time }) {

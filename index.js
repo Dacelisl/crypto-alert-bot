@@ -33,6 +33,7 @@ app.listen(PORT, () => {
 
 router.get('/report', async (req, res) => {
   try {
+    await evaluateSignals()
     const report = await generateStatsReport({ returnAsText: true })
     res.type('text/plain').send(report)
   } catch (err) {

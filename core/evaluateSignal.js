@@ -1,6 +1,7 @@
 const axios = require('axios')
 const { updateAlertStatus } = require('../db/db')
 const { updateSignalStatusByDetails, getPendingSignals } = require('../db/history/signalStore')
+
 const parseInterval = (interval) => {
   const unit = interval.slice(-1)
   const value = parseInt(interval)
@@ -12,7 +13,7 @@ const parseInterval = (interval) => {
     case 'd':
       return value * 24 * 60 * 60 * 1000
     default:
-      return 15 * 60 * 1000 // fallback 15m
+      return 15 * 60 * 1000
   }
 }
 
@@ -26,38 +27,51 @@ function calculateCandlesSince(timestamp, interval) {
 async function fetchCandles(symbol, interval, limit) {
   const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`
   const res = await axios.get(url)
-  return res.data.map((k) => parseFloat(k[4])) // solo cierres
+  return res.data.map((k) => ({
+    close: parseFloat(k[4]),
+    high: parseFloat(k[2]),
+    low: parseFloat(k[3]),
+  }))
 }
 
 async function evaluateSignals() {
-  getPendingSignals(async (err, alerts) => {
-    if (err) return console.error('Error obteniendo señales:', err)
-
+  try {
+    const alerts = await getPendingSignals()
     for (const alert of alerts) {
       const interval = alert.interval
       const candlesNeeded = calculateCandlesSince(alert.timestamp, interval)
       try {
-        const prices = await fetchCandles(alert.symbol, interval, candlesNeeded)
-        let hit = null
+        const candles = await fetchCandles(alert.symbol, interval, candlesNeeded)
+        let entered = false
+        let hit = 'pending'
 
-        for (const p of prices) {
-          if (alert.direction === 'LONG') {
-            if (p >= alert.take_profit) {
-              hit = 'tp_hit'
-              break
-            }
-            if (p <= alert.stop_loss) {
-              hit = 'sl_hit'
-              break
+        for (const candle of candles) {
+          const price = candle.close
+
+          if (!entered) {
+            if (price >= alert.entry_min && price <= alert.entry_max) {
+              entered = true
+              continue
             }
           } else {
-            if (p <= alert.take_profit) {
-              hit = 'tp_hit'
-              break
-            }
-            if (p >= alert.stop_loss) {
-              hit = 'sl_hit'
-              break
+            if (alert.direction === 'LONG') {
+              if (candle.high >= alert.take_profit) {
+                hit = 'tp_hit'
+                break
+              }
+              if (candle.low <= alert.stop_loss) {
+                hit = 'sl_hit'
+                break
+              }
+            } else {
+              if (candle.low <= alert.take_profit) {
+                hit = 'tp_hit'
+                break
+              }
+              if (candle.high >= alert.stop_loss) {
+                hit = 'sl_hit'
+                break
+              }
             }
           }
         }
@@ -65,21 +79,17 @@ async function evaluateSignals() {
         if (hit) {
           const date = new Date().toISOString()
           updateAlertStatus({ symbol: alert.symbol, direction: alert.direction, timestamp: alert.timestamp, status: hit, hit_time: date })
-          updateSignalStatusByDetails({
-            id: alert.id,
-            status: hit,
-            hit_time: date,
-          })
-
-          console.log(`📌 ${alert.symbol} → ${hit.toUpperCase()}`)
+          updateSignalStatusByDetails({ id: alert.id, status: hit, hit_time: date })
         } else {
           console.log(`⏳ ${alert.symbol} sigue abierta`)
         }
       } catch (e) {
-        console.error(`Error evaluando ${alert.symbol}:`, e.message)
+        console.error(`❌ Error evaluando ${alert.symbol}:`, e.message)
       }
     }
-  })
+  } catch (err) {
+    console.error('❌ Error general en evaluateSignals:', err.message)
+  }
 }
 
 if (require.main === module) {

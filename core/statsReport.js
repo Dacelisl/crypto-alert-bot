@@ -33,7 +33,6 @@ function generateStatsReport({ returnAsText = false } = {}) {
               `,
                 (err, rows) => {
                   if (err) return reject(err)
-
                   let output = ''
                   output += `\n📊 Reporte de Rendimiento General:\n`
                   output += `Total de señales: ${stats.total}\n`
