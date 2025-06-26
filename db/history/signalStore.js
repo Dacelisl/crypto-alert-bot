@@ -62,9 +62,6 @@ function updateStatus() {
     } else {
       console.log(`✅ Registros actualizados: ${this.changes}`)
     }
-    db.close(() => {
-      console.log('📦 Base de datos cerrada.')
-    })
   })
 }
 
