@@ -42,17 +42,26 @@ async function vwapStructureStrategy(symbol, interval) {
 
   const atr = Math.abs(current.high - current.low) || 0.01
 
+  const entryBuffer = 0.005 // 0.5% margen para zona de entrada
+  const tpDistance = 0.01 // 1% fuera de zona de entrada
+  const slDistance = 0.007 // 0.7% fuera de zona de entrada
+
   let entry_min, entry_max, tp, sl
+
   if (direction === 'LONG') {
-    entry_min = currentPrice * 0.995
-    entry_max = currentPrice * 0.998
-    tp = entry_max + atr * 2.5
-    sl = entry_min - atr * 1.5
+    entry_min = currentPrice * (1 - entryBuffer)
+    entry_max = currentPrice * (1 - entryBuffer / 2)
+    tp = entry_max * (1 + tpDistance)
+    sl = entry_min * (1 - slDistance)
+
+    if (tp <= entry_max || sl >= entry_min) return null
   } else {
-    entry_max = currentPrice * 1.005
-    entry_min = currentPrice * 1.002
-    tp = entry_min - atr * 2.5
-    sl = entry_max + atr * 1.5
+    entry_max = currentPrice * (1 + entryBuffer)
+    entry_min = currentPrice * (1 + entryBuffer / 2)
+    tp = entry_min * (1 - tpDistance)
+    sl = entry_max * (1 + slDistance)
+
+    if (tp >= entry_min || sl <= entry_max) return null
   }
 
   const rr = Math.abs((tp - currentPrice) / (currentPrice - sl))

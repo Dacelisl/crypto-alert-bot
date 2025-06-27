@@ -5,7 +5,7 @@ const { multiTimeframeStrategy } = require('../core/multiTimeframeStrategy')
 const { insertAlert, alertRecentlySent } = require('../db/db')
 const { saveSignal } = require('../db/history/signalStore')
 const { TOKENS } = require('../config/tokens')
-const interval = '15m'
+const interval = '1h'
 async function checkMarketConditions(bot) {
   const { btcD, usdtD, total3 } = await getSocketData()
 
@@ -36,7 +36,7 @@ async function checkMarketConditions(bot) {
           }
           if (!exists) {
             const date = new Date().toISOString()
-            mensajeBase += `\n✨ *${token}USDT* — ${signal.direction}\n`
+            mensajeBase += `\n✨ *${token}USDT* — ${signal.direction} — ${interval} \n`
             mensajeBase += `• Precio: $${signal.current_price}\n`
             mensajeBase += `📥 Entrada: $${`[${signal.entry_min} - ${signal.entry_max}]`}\n`
             mensajeBase += `🎯 TP: $${signal.take_profit}\n`
