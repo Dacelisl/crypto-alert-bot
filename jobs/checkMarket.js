@@ -1,6 +1,7 @@
 const { getSocketData } = require('../core/tradingviewSocket')
 /* const { analyzeToken } = require('../core/fiboPatternStrategy') */
 const { vwapStructureStrategy } = require('../core/VwapStructure')
+const { multiTimeframeStrategy } = require('../core/multiTimeframeStrategy')
 const { insertAlert, alertRecentlySent } = require('../db/db')
 const { saveSignal } = require('../db/history/signalStore')
 const { TOKENS } = require('../config/tokens')

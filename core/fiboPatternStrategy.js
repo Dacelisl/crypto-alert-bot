@@ -1,6 +1,6 @@
 const axios = require('axios')
 const { RSI, EMA, BollingerBands, ATR } = require('technicalindicators')
-const { detectCandlePattern } = require('./patternDetector')
+const { detectCandlePattern } = require('../utils/patternDetector')
 
 async function fetchKlines(symbol, interval) {
   const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=300`
