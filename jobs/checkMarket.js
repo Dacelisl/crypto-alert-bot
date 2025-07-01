@@ -1,11 +1,9 @@
 const { getSocketData } = require('../core/tradingviewSocket')
-/* const { analyzeToken } = require('../core/fiboPatternStrategy') */
-const { vwapStructureStrategy } = require('../core/VwapStructure')
 const { multiTimeframeStrategy } = require('../core/multiTimeframeStrategy')
 const { insertAlert, alertRecentlySent } = require('../db/db')
 const { saveSignal } = require('../db/history/signalStore')
 const { TOKENS } = require('../config/tokens')
-const interval = '1h'
+const interval = '15m'
 async function checkMarketConditions(bot) {
   const { btcD, usdtD, total3 } = await getSocketData()
 
@@ -24,10 +22,9 @@ async function checkMarketConditions(bot) {
   let nuevasAlertas = 0
 
   for (const token of TOKENS) {
-    /*  const signal = await analyzeToken(token, interval) */
-    const signal = await vwapStructureStrategy(token, interval)
+    const signal = await multiTimeframeStrategy(token)
 
-    if (signal.direction === 'LONG' || signal.direction === 'SHORT') {
+    if (signal?.direction === 'LONG' || signal?.direction === 'SHORT') {
       await new Promise((resolve) => {
         alertRecentlySent(token, signal.direction, (err, exists) => {
           if (err) {

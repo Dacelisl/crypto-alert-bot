@@ -1,8 +1,11 @@
-const { VWAP, RSI, EMA } = require('technicalindicators')
 const axios = require('axios')
+const { EMA } = require('technicalindicators')
 const { calculateSupertrend } = require('../utils/Supertrend')
 const { calculateATRFromArrays } = require('../utils/calculateATRFromArrays')
+const { detectMarketStructure } = require('../utils/detectMarketStructure')
+const { calculateVolumeProfile } = require('../utils/volumen')
 
+// Funciones auxiliares
 async function fetchKlines(symbol, interval, limit = 300) {
   const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`
   const res = await axios.get(url)
@@ -15,224 +18,204 @@ async function fetchKlines(symbol, interval, limit = 300) {
     volume: parseFloat(k[5]),
   }))
 }
+// 1. Función para detectar pivotes
+function isPivotHigh(candles, index, leftRightBars = 3) {
+  const high = candles[index].high
+  for (let i = 1; i <= leftRightBars; i++) {
+    if (index - i >= 0 && candles[index - i].high >= high) return false
+    if (index + i < candles.length && candles[index + i].high >= high) return false
+  }
+  return true
+}
+function isPivotLow(candles, index, leftRightBars = 3) {
+  const low = candles[index].low
+  for (let i = 1; i <= leftRightBars; i++) {
+    if (index - i >= 0 && candles[index - i].low <= low) return false
+    if (index + i < candles.length && candles[index + i].low <= low) return false
+  }
+  return true
+}
+// 2. Encontrar niveles clave
+function findKeyLevels(candles, lookback = 100) {
+  const levels = []
+  const sensitivity = 0.005 // 0.5%
 
-// Función para detectar estructura de mercado (HH/HL para alcista, LL/LH para bajista)
-function detectMarketStructure(candles, lookback = 5) {
-  const highs = candles.map((c) => c.high)
-  const lows = candles.map((c) => c.low)
+  // Analizar solo el lookback reciente
+  const startIndex = Math.max(0, candles.length - lookback)
 
-  // Identificar pivots
-  const pivotHighs = []
-  const pivotLows = []
-
-  for (let i = 3; i < candles.length - 3; i++) {
-    if (highs[i] > highs[i - 1] && highs[i] > highs[i + 1]) pivotHighs.push(candles[i])
-    if (lows[i] < lows[i - 1] && lows[i] < lows[i + 1]) pivotLows.push(candles[i])
+  for (let i = startIndex + 3; i < candles.length - 3; i++) {
+    if (isPivotHigh(candles, i, 3)) {
+      levels.push({
+        price: candles[i].high,
+        type: 'resistance',
+        timestamp: candles[i].time,
+      })
+    }
+    if (isPivotLow(candles, i, 3)) {
+      levels.push({
+        price: candles[i].low,
+        type: 'support',
+        timestamp: candles[i].time,
+      })
+    }
   }
 
-  // Analizar últimos pivots
-  const lastHighs = pivotHighs.slice(-lookback)
-  const lastLows = pivotLows.slice(-lookback)
+  // Agrupar niveles cercanos
+  const grouped = []
+  levels.sort((a, b) => a.price - b.price)
 
-  let bullish = false
-  let bearish = false
+  for (const level of levels) {
+    const existing = grouped.find((g) => Math.abs(g.price - level.price) / g.price < sensitivity)
 
-  if (lastHighs.length >= 2 && lastLows.length >= 2) {
-    bullish = lastHighs[lastHighs.length - 1].high > lastHighs[lastHighs.length - 2].high && lastLows[lastLows.length - 1].low > lastLows[lastLows.length - 2].low
-
-    bearish = lastHighs[lastHighs.length - 1].high < lastHighs[lastHighs.length - 2].high && lastLows[lastLows.length - 1].low < lastLows[lastLows.length - 2].low
+    if (existing) {
+      existing.count++
+    } else {
+      grouped.push({
+        price: level.price,
+        type: level.type,
+        count: 1,
+      })
+    }
   }
-
-  return { bullish, bearish }
+  return grouped.filter((g) => g.count > 1).sort((a, b) => b.count - a.count)
 }
 
-// Función para calcular pivots diarios
-function calculateDailyPivots(dailyCandles) {
-  const pivotPoints = []
-
-  for (let i = 0; i < dailyCandles.length; i++) {
-    const candle = dailyCandles[i]
-    const pp = (candle.high + candle.low + candle.close) / 3
-    const r1 = 2 * pp - candle.low
-    const s1 = 2 * pp - candle.high
-    const r2 = pp + (candle.high - candle.low)
-    const s2 = pp - (candle.high - candle.low)
-
-    pivotPoints.push({
-      time: candle.time,
-      pp,
-      r1,
-      r2,
-      s1,
-      s2,
-    })
-  }
-
-  return pivotPoints
-}
-
-// Función para calcular ATR (Average True Range)
-function calculateATR(candles, period = 14) {
-  const highs = candles.map((c) => c.high)
-  const lows = candles.map((c) => c.low)
-  const closes = candles.map((c) => c.close)
-  return calculateATRFromArrays(highs, lows, closes, period)
-}
-
-async function multiTimeframeStrategy(symbol) {
-  // Obtener datos de todos los timeframes
-  const tf15m = await fetchKlines(symbol, '15m', 150)
+async function multiTimeframeStrategy(symbol, interval = '15m') {
+  const tf15m = await fetchKlines(symbol, '15m', 500)
   const tf1h = await fetchKlines(symbol, '1h', 150)
   const tf4h = await fetchKlines(symbol, '4h', 150)
   const tf1d = await fetchKlines(symbol, '1d', 150)
 
-  const currentPrice = tf15m[tf15m.length - 1].close
+  if (tf15m.length < 100) {
+    console.error('❌ No hay suficientes velas para calcular indicadores')
+    return null
+  }
+  // Obtener velas actuales (15m)
+  const currentCandle = tf15m[tf15m.length - 1]
+  const currentPrice = currentCandle.close
 
-  // 1. ANÁLISIS DIARIO (Soporte/Resistencia)
-  const dailyPivots = calculateDailyPivots(tf1d)
-  const lastDailyPivot = dailyPivots[dailyPivots.length - 1]
+  // Calcular niveles clave
+  const keyLevels = findKeyLevels(tf15m)
+  const supports = keyLevels.filter((l) => l.type === 'support').map((l) => l.price)
+  const resistances = keyLevels.filter((l) => l.type === 'resistance').map((l) => l.price)
 
-  // 2. ANÁLISIS 4H (Tendencia principal)
-  const ema50_4h = EMA.calculate({
+  // Calcular indicadores
+  // Indicadores (usando tfHigher2 como equivalente a 4h)
+  const ema50 = EMA.calculate({
     period: 50,
-    values: tf4h.map((c) => c.close),
+    values: tf15m.map((c) => c.close),
   })
-  const ema50_4h_current = ema50_4h[ema50_4h.length - 1]
-  const marketStructure4h = detectMarketStructure(tf4h)
+  const ema50_current = ema50[ema50.length - 1] || 0
 
-  // 3. ANÁLISIS 1H (Dirección principal)
-  const vwap1h = VWAP.calculate({
-    high: tf1h.map((c) => c.high),
-    low: tf1h.map((c) => c.low),
-    close: tf1h.map((c) => c.close),
-    volume: tf1h.map((c) => c.volume),
-  })
-  const vwap1h_current = vwap1h[vwap1h.length - 1]
+  // Estructura de mercado en timeframe superior
+  const marketStructure = detectMarketStructure(tf4h)
 
-  const rsi1h = RSI.calculate({
-    values: tf1h.map((c) => c.close),
-    period: 14,
-  })
-  const rsi1h_current = rsi1h[rsi1h.length - 1]
-
-  // 4. ANÁLISIS 15m (Entradas precisas)
+  // Supertrend en timeframe actual
   const { trend: supertrendTrend } = calculateSupertrend({
-    high: tf15m.slice(-100).map((c) => c.high),
-    low: tf15m.slice(-100).map((c) => c.low),
-    close: tf15m.slice(-100).map((c) => c.close),
+    high: tf15m.map((c) => c.high),
+    low: tf15m.map((c) => c.low),
+    close: tf15m.map((c) => c.close),
     period: 10,
     multiplier: 3.0,
   })
-
-  // Verificar que tenemos suficientes datos
-  if (supertrendTrend.length < 11) {
-    console.error(`No hay suficientes datos para calcular Supertrend (necesarios ${11} velas)`)
-    return 'NO_TRADE'
-  }
-
-  // Obtener el último valor de tendencia
-  const st15m_current = supertrendTrend[supertrendTrend.length - 1]
-
-  // Manejar valores nulos o undefined
-  if (st15m_current === null || st15m_current === undefined) {
-    console.warn('Valor Supertrend actual es nulo, saltando señal')
-    return 'NO_TRADE'
-  }
-
-  // Calcular volumen delta (compra vs venta)
-  let volumeDelta = 0
-  const volCandle = tf15m[tf15m.length - 1]
-  if (volCandle.close > volCandle.open) {
-    volumeDelta = volCandle.volume
-  } else if (volCandle.close < volCandle.open) {
-    volumeDelta = -volCandle.volume
-  }
-
-  // 5. LÓGICA DE DECISIÓN (Confluencia de factores)
-  let direction = null
-  const trendStrength = marketStructure4h.bullish && currentPrice > ema50_4h_current
-  const bearishTrend = !marketStructure4h.bullish && currentPrice < ema50_4h_current
-  const momentum = rsi1h_current > 50 && currentPrice > vwap1h_current
-  const bearishMomentum = rsi1h_current < 50 && currentPrice < vwap1h_current
+  const stCurrent = supertrendTrend[supertrendTrend.length - 1] || 0
 
   // Calcular ATR
-  const atr = calculateATR(tf15m, 14)
-  const currentATR = atr[atr.length - 1]
-
-  let entryZone = {}
-  let tp, sl
-
-  // LÓGICA LONG
-  if (trendStrength && momentum) {
-    const stSignal = st15m_current === 1
-    const volumeSignal = volumeDelta > 0
-
-    if (stSignal && volumeSignal) {
-      direction = 'LONG'
-      entryZone = {
-        min: currentPrice - 0.5 * currentATR,
-        max: currentPrice + 0.3 * currentATR,
-      }
-
-      sl = Math.min(tf15m[tf15m.length - 1].low, lastDailyPivot.s1)
-      tp = entryZone.max + 2.5 * (entryZone.max - sl)
-    }
-  }
-  // LÓGICA SHORT (implementación inversa)
-  else if (bearishTrend && bearishMomentum) {
-    const stSignal = st15m_current === -1 // Supertrend bajista
-    const volumeSignal = volumeDelta < 0 // Volumen negativo
-
-    if (stSignal && volumeSignal) {
-      direction = 'SHORT'
-      // Zona de entrada inversa (+0.5 ATR hacia arriba, +0.3 ATR hacia abajo)
-      entryZone = {
-        min: currentPrice - 0.3 * currentATR,
-        max: currentPrice + 0.5 * currentATR,
-      }
-
-      // Stop Loss en R1 diario o máximo local (inverso)
-      sl = Math.max(tf15m[tf15m.length - 1].high, lastDailyPivot.r1)
-
-      // Take Profit (inverso: hacia abajo)
-      tp = entryZone.min - 2.5 * (sl - entryZone.min)
-    }
-  }
-  if (!direction) return 'NO_TRADE'
-
-  // Ajustar TP a niveles pivots cercanos
-  if (direction === 'LONG' && tp > lastDailyPivot.r1) {
-    tp = lastDailyPivot.r1
-  } else if (direction === 'SHORT' && tp < lastDailyPivot.s1) {
-    tp = lastDailyPivot.s1
+  const atrValues = calculateATRFromArrays({
+    high: tf15m.map((c) => c.high),
+    low: tf15m.map((c) => c.low),
+    close: tf15m.map((c) => c.close),
+    period: 14,
+  })
+  const currentATR = atrValues[atrValues.length - 1] || 0
+  const avgATR = atrValues.slice(-14).reduce((a, b) => a + b, 0) / 14
+  const atrRatio = currentATR / avgATR
+  if (atrRatio < 0.7 || Math.max(...supports) - Math.min(...resistances) < currentATR * 2) {
+    return null // Evitar operar en rangos estrechos
   }
 
-  const rr = Math.abs(direction === 'LONG' ? (tp - currentPrice) / (currentPrice - sl) : (sl - currentPrice) / (currentPrice - tp)).toFixed(2)
+  // 2. Filtro de densidad de volumen
+  const volumeProfile = calculateVolumeProfile(tf15m.slice(-50))
+  const currentVolumeZone = volumeProfile.findZone(currentPrice)
+  if (!currentVolumeZone || currentVolumeZone.density < 0.7) return null
+
+  // Lógica de dirección
+  let direction = null
+
+  // Condiciones para LONG
+  const longConditions = marketStructure.bullish && currentPrice > ema50_current && stCurrent === 1 && currentPrice > Math.max(...supports) && resistances.some((r) => r > currentPrice)
+
+  // Condiciones para SHORT
+  const shortConditions = (marketStructure.bearish || currentPrice < ema50_current * 0.98) && stCurrent === -1 && currentPrice < Math.min(...resistances) && supports.some((s) => s < currentPrice)
+
+  if (longConditions) direction = 'LONG'
+  else if (shortConditions) direction = 'SHORT'
+
+  // --- Paso 5: Cálculo de TP/SL con buffer dinámico ---
+  const volatilityRatio = currentATR / avgATR
+  const buffer = currentATR * (volatilityRatio > 1.2 ? 0.7 : 0.5)
+  let tp = 0
+  let sl = 0
+
+  if (direction === 'LONG') {
+    // SL en soporte más cercano con buffer
+    const validSupports = supports.filter((s) => s < currentPrice - buffer)
+    const nearestSupport = validSupports.length > 0 ? Math.max(...validSupports) : currentPrice - 2 * currentATR
+    sl = nearestSupport || currentPrice - 2 * currentATR
+
+    // TP en resistencia con RR mínimo 1.2
+    const minRR = 1.2
+    const minTP = currentPrice + minRR * (currentPrice - sl)
+    const nextResistance = resistances.filter((r) => r >= minTP).sort((a, b) => a - b)[0]
+    tp = nextResistance || minTP
+  }
+  if (direction === 'SHORT') {
+    // SHORT
+    // SL en resistencia más cercana con buffer
+    const nearestResistance = Math.min(...resistances.filter((r) => r > currentPrice + buffer))
+    sl = nearestResistance || currentPrice + 2 * currentATR
+    // TP en soporte con RR mínimo 1.2
+    const minRR = 1.2
+    const minTP = currentPrice - minRR * (sl - currentPrice)
+    const nextSupport = supports.filter((s) => s <= minTP).sort((a, b) => b - a)[0]
+    tp = nextSupport || minTP
+  }
+  if (!direction) return 'NONE'
+  // --- Paso 6: Validación de niveles ---
+  if (direction === 'LONG') {
+    if (tp <= currentPrice || sl >= currentPrice) return null
+    if ((tp - currentPrice) / (currentPrice - sl) < 1.2) return null
+  } else {
+    if (tp >= currentPrice || sl <= currentPrice) return null
+    if ((sl - currentPrice) / (currentPrice - tp) < 1.2) return null
+  }
+  // --- Paso 7: Zona de entrada dinámica ---
+  const entryFactor = volatilityRatio > 1.3 ? 0.35 : 0.3
+  const entryZone = {
+    min: currentPrice - entryFactor * currentATR,
+    max: currentPrice + entryFactor * currentATR,
+  }
+
+  // --- Paso 8: Cálculo de RR real ---
+  const entryPrice = (entryZone.min + entryZone.max) / 2
+  const risk = direction === 'LONG' ? entryPrice - sl : sl - entryPrice
+  const reward = direction === 'LONG' ? tp - entryPrice : entryPrice - tp
+  const rr = (reward / risk).toFixed(2)
 
   return {
     symbol,
-    interval: '15m',
-    current_price: currentPrice.toFixed(4),
-    entry_min: entryZone.min.toFixed(4),
-    entry_max: entryZone.max.toFixed(4),
+    interval,
+    current_price: parseFloat(currentPrice.toFixed(4)),
+    entry_min: parseFloat(entryZone.min.toFixed(4)),
+    entry_max: parseFloat(entryZone.max.toFixed(4)),
     take_profit: parseFloat(tp.toFixed(4)),
     stop_loss: parseFloat(sl.toFixed(4)),
+    key_levels: keyLevels.slice(0, 5),
     direction,
     rr: rr,
-    indicators: {
-      daily_pivot: lastDailyPivot,
-      ema50_4h: ema50_4h_current,
-      market_structure_4h: marketStructure4h,
-      vwap_1h: vwap1h_current,
-      rsi_1h: rsi1h_current,
-      supertrend_15m: st15m_current,
-      volume_delta: volumeDelta,
-    },
     status: 'pending',
     hit_time: null,
   }
 }
 
-module.exports = {
-  multiTimeframeStrategy,
-}
+module.exports = { multiTimeframeStrategy }

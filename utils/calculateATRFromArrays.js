@@ -24,7 +24,6 @@ function calculateATRFromArrays({ high, low, close, period = 14 }) {
       atr.push((atr[i - 1] * (period - 1) + tr[i]) / period)
     }
   }
-
   return atr
 }
 module.exports = { calculateATRFromArrays }

@@ -1,4 +1,4 @@
-const { calculateATRFromArrays } = require('../utils/calculateATRFromArrays')
+const { calculateATRFromArrays } = require('./calculateATRFromArrays')
 
 function calculateSupertrend({ high, low, close, period = 10, multiplier = 3.0 }) {
   const atr = calculateATRFromArrays({ high, low, close, period })
@@ -34,7 +34,6 @@ function calculateSupertrend({ high, low, close, period = 10, multiplier = 3.0 }
       } else {
         finalUpper = supertrend[i - 1]
       }
-
       if (lowerBand[i] > supertrend[i - 1] || close[i - 1] < supertrend[i - 1]) {
         finalLower = lowerBand[i]
       } else {
@@ -72,7 +71,6 @@ function calculateSupertrend({ high, low, close, period = 10, multiplier = 3.0 }
     supertrend.push(currentSupertrend)
     trend.push(currentTrend)
   }
-
   return { supertrend, trend }
 }
 module.exports = {

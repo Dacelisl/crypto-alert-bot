@@ -1,5 +1,6 @@
 const TOKENS = [
   'BTC',
+  'ETH',
   'SUI',
   'TAO',
   'FET',
@@ -8,7 +9,6 @@ const TOKENS = [
   'TRX',
   'BCH',
   'ENA',
-  'ETH',
   'ZEN',
   'ADA',
   'TRB',
