@@ -3,7 +3,6 @@ const { EMA } = require('technicalindicators')
 const { calculateSupertrend } = require('../utils/Supertrend')
 const { calculateATRFromArrays } = require('../utils/calculateATRFromArrays')
 const { detectMarketStructure } = require('../utils/detectMarketStructure')
-const { calculateVolumeProfile } = require('../utils/volumen')
 
 // Funciones auxiliares
 async function fetchKlines(symbol, interval, limit = 300) {
@@ -17,6 +16,9 @@ async function fetchKlines(symbol, interval, limit = 300) {
     close: parseFloat(k[4]),
     volume: parseFloat(k[5]),
   }))
+}
+function esNumeroValido(valor) {
+  return typeof valor === 'number' && !isNaN(valor) && Number.isFinite(valor)
 }
 // 1. Función para detectar pivotes
 function isPivotHigh(candles, index, leftRightBars = 3) {
@@ -103,12 +105,12 @@ async function multiTimeframeStrategy(symbol, interval = '15m') {
   // Indicadores (usando tfHigher2 como equivalente a 4h)
   const ema50 = EMA.calculate({
     period: 50,
-    values: tf15m.map((c) => c.close),
+    values: tf4h.map((c) => c.close),
   })
   const ema50_current = ema50[ema50.length - 1] || 0
 
   // Estructura de mercado en timeframe superior
-  const marketStructure = detectMarketStructure(tf4h)
+  const marketStructure = detectMarketStructure(tf1h)
 
   // Supertrend en timeframe actual
   const { trend: supertrendTrend } = calculateSupertrend({
@@ -134,19 +136,14 @@ async function multiTimeframeStrategy(symbol, interval = '15m') {
     return null // Evitar operar en rangos estrechos
   }
 
-  // 2. Filtro de densidad de volumen
-  const volumeProfile = calculateVolumeProfile(tf15m.slice(-50))
-  const currentVolumeZone = volumeProfile.findZone(currentPrice)
-  if (!currentVolumeZone || currentVolumeZone.density < 0.7) return null
-
   // Lógica de dirección
   let direction = null
 
   // Condiciones para LONG
-  const longConditions = marketStructure.bullish && currentPrice > ema50_current && stCurrent === 1 && currentPrice > Math.max(...supports) && resistances.some((r) => r > currentPrice)
+  const longConditions = marketStructure.bullish && currentPrice > ema50_current && currentPrice > Math.max(...supports) && resistances.some((r) => r > currentPrice)
 
   // Condiciones para SHORT
-  const shortConditions = (marketStructure.bearish || currentPrice < ema50_current * 0.98) && stCurrent === -1 && currentPrice < Math.min(...resistances) && supports.some((s) => s < currentPrice)
+  const shortConditions = marketStructure.bearish || (currentPrice < ema50_current * 0.98 && currentPrice < Math.min(...resistances) && supports.some((s) => s < currentPrice))
 
   if (longConditions) direction = 'LONG'
   else if (shortConditions) direction = 'SHORT'
@@ -195,6 +192,8 @@ async function multiTimeframeStrategy(symbol, interval = '15m') {
     min: currentPrice - entryFactor * currentATR,
     max: currentPrice + entryFactor * currentATR,
   }
+
+  if (!esNumeroValido(tp) || !esNumeroValido(sl)) return null
 
   // --- Paso 8: Cálculo de RR real ---
   const entryPrice = (entryZone.min + entryZone.max) / 2
