@@ -2,6 +2,7 @@ const axios = require('axios')
 const { EMA } = require('technicalindicators')
 const { calculateSupertrend } = require('../utils/Supertrend')
 const { calculateATRFromArrays } = require('../utils/calculateATRFromArrays')
+const { calculateADX } = require('../utils/ADX')
 const { detectMarketStructure } = require('../utils/detectMarketStructure')
 
 // Funciones auxiliares
@@ -20,7 +21,6 @@ async function fetchKlines(symbol, interval, limit = 300) {
 function esNumeroValido(valor) {
   return typeof valor === 'number' && !isNaN(valor) && Number.isFinite(valor)
 }
-// 1. Función para detectar pivotes
 function isPivotHigh(candles, index, leftRightBars = 3) {
   const high = candles[index].high
   for (let i = 1; i <= leftRightBars; i++) {
@@ -37,7 +37,6 @@ function isPivotLow(candles, index, leftRightBars = 3) {
   }
   return true
 }
-// 2. Encontrar niveles clave
 function findKeyLevels(candles, lookback = 100) {
   const levels = []
   const sensitivity = 0.005 // 0.5%
@@ -79,6 +78,7 @@ function findKeyLevels(candles, lookback = 100) {
       })
     }
   }
+
   return grouped.filter((g) => g.count > 1).sort((a, b) => b.count - a.count)
 }
 
@@ -88,115 +88,85 @@ async function multiTimeframeStrategy(symbol, interval = '15m') {
   const tf4h = await fetchKlines(symbol, '4h', 150)
   const tf1d = await fetchKlines(symbol, '1d', 150)
 
-  if (tf15m.length < 100) {
-    console.error('❌ No hay suficientes velas para calcular indicadores')
-    return null
-  }
   // Obtener velas actuales (15m)
-  const currentCandle = tf15m[tf15m.length - 1]
+  const currentCandle = tf15m.at(-1)
   const currentPrice = currentCandle.close
 
-  // Calcular niveles clave
-  const keyLevels = findKeyLevels(tf15m)
+  const keyLevels = findKeyLevels(tf1h)
   const supports = keyLevels.filter((l) => l.type === 'support').map((l) => l.price)
   const resistances = keyLevels.filter((l) => l.type === 'resistance').map((l) => l.price)
 
-  // Calcular indicadores
-  // Indicadores (usando tfHigher2 como equivalente a 4h)
-  const ema50 = EMA.calculate({
-    period: 50,
-    values: tf4h.map((c) => c.close),
+  const ema50 = EMA.calculate({ period: 50, values: tf4h.map((c) => c.close) })
+  const ema20 = EMA.calculate({ period: 20, values: tf4h.map((c) => c.close) })
+  const ema50_current = ema50.at(-1)
+  const ema20_current = ema20.at(-1)
+
+  //ADX
+  const adxValues = calculateADX({
+    close: tf4h.map((c) => c.close),
+    high: tf4h.map((c) => c.high),
+    low: tf4h.map((c) => c.low),
+    period: 14,
   })
-  const ema50_current = ema50[ema50.length - 1] || 0
+  const adxCurrent = adxValues.length > 0 && typeof adxValues.at(-1) === 'number' ? adxValues.at(-1) : 0
 
-  // Estructura de mercado en timeframe superior
-  const marketStructure = detectMarketStructure(tf1h)
-
-  // Supertrend en timeframe actual
-  const { trend: supertrendTrend } = calculateSupertrend({
-    high: tf15m.map((c) => c.high),
-    low: tf15m.map((c) => c.low),
-    close: tf15m.map((c) => c.close),
+  //superTrend
+  const stTrend = calculateSupertrend({
+    high: tf4h.map((c) => c.high),
+    low: tf4h.map((c) => c.low),
+    close: tf4h.map((c) => c.close),
     period: 10,
-    multiplier: 3.0,
-  })
-  const stCurrent = supertrendTrend[supertrendTrend.length - 1] || 0
+    multiplier: 3,
+  }).trend.at(-1)
 
-  // Calcular ATR
-  const atrValues = calculateATRFromArrays({
+  const atr = calculateATRFromArrays({
     high: tf15m.map((c) => c.high),
     low: tf15m.map((c) => c.low),
     close: tf15m.map((c) => c.close),
     period: 14,
   })
-  const currentATR = atrValues[atrValues.length - 1] || 0
-  const avgATR = atrValues.slice(-14).reduce((a, b) => a + b, 0) / 14
-  const atrRatio = currentATR / avgATR
-  if (atrRatio < 0.7 || Math.max(...supports) - Math.min(...resistances) < currentATR * 2) {
-    return null // Evitar operar en rangos estrechos
-  }
+  const currentATR = atr.at(-1) || 0
+  const avgATR = atr.slice(-14).reduce((sum, v) => sum + v, 0) / 14
 
-  // Lógica de dirección
-  let direction = null
+  if (currentATR < avgATR * 0.7) return null
 
-  // Condiciones para LONG
-  const longConditions = marketStructure.bullish && currentPrice > ema50_current && currentPrice > Math.max(...supports) && resistances.some((r) => r > currentPrice)
+  const ms = detectMarketStructure(tf1h)
+  const direction =
+    ms.bullish && ema20_current > ema50_current && currentPrice > ema50_current && stTrend === 1 && adxCurrent > 25
+      ? 'LONG'
+      : ms.bearish && ema20_current < ema50_current && currentPrice < ema50_current && stTrend === -1 && adxCurrent < 20
+      ? 'SHORT'
+      : 'NONE'
+  if (direction === 'NONE') return null
 
-  // Condiciones para SHORT
-  const shortConditions = marketStructure.bearish || (currentPrice < ema50_current * 0.98 && currentPrice < Math.min(...resistances) && supports.some((s) => s < currentPrice))
-
-  if (longConditions) direction = 'LONG'
-  else if (shortConditions) direction = 'SHORT'
-
-  // --- Paso 5: Cálculo de TP/SL con buffer dinámico ---
   const volatilityRatio = currentATR / avgATR
   const buffer = currentATR * (volatilityRatio > 1.2 ? 0.7 : 0.5)
-  let tp = 0
-  let sl = 0
+  let tp = 0,
+    sl = 0
 
   if (direction === 'LONG') {
-    // SL en soporte más cercano con buffer
-    const validSupports = supports.filter((s) => s < currentPrice - buffer)
-    const nearestSupport = validSupports.length > 0 ? Math.max(...validSupports) : currentPrice - 2 * currentATR
-    sl = nearestSupport || currentPrice - 2 * currentATR
-
-    // TP en resistencia con RR mínimo 1.2
-    const minRR = 1.2
-    const minTP = currentPrice + minRR * (currentPrice - sl)
-    const nextResistance = resistances.filter((r) => r >= minTP).sort((a, b) => a - b)[0]
-    tp = nextResistance || minTP
-  }
-  if (direction === 'SHORT') {
-    // SHORT
-    // SL en resistencia más cercana con buffer
-    const nearestResistance = Math.min(...resistances.filter((r) => r > currentPrice + buffer))
-    sl = nearestResistance || currentPrice + 2 * currentATR
-    // TP en soporte con RR mínimo 1.2
-    const minRR = 1.2
-    const minTP = currentPrice - minRR * (sl - currentPrice)
-    const nextSupport = supports.filter((s) => s <= minTP).sort((a, b) => b - a)[0]
-    tp = nextSupport || minTP
-  }
-  if (!direction) return 'NONE'
-  // --- Paso 6: Validación de niveles ---
-  if (direction === 'LONG') {
-    if (tp <= currentPrice || sl >= currentPrice) return null
-    if ((tp - currentPrice) / (currentPrice - sl) < 1.2) return null
+    const slSupport = Math.max(...supports.filter((s) => s < currentPrice - buffer))
+    sl = esNumeroValido(slSupport) ? slSupport : currentPrice - 2 * currentATR
+    const minTP = currentPrice + 1.2 * (currentPrice - sl)
+    const resistance = resistances.find((r) => r > minTP)
+    tp = esNumeroValido(resistance) ? resistance : minTP
   } else {
-    if (tp >= currentPrice || sl <= currentPrice) return null
-    if ((sl - currentPrice) / (currentPrice - tp) < 1.2) return null
-  }
-  // --- Paso 7: Zona de entrada dinámica ---
-  const entryFactor = volatilityRatio > 1.3 ? 0.35 : 0.3
-  const entryZone = {
-    min: currentPrice - entryFactor * currentATR,
-    max: currentPrice + entryFactor * currentATR,
+    const slRes = Math.min(...resistances.filter((r) => r > currentPrice + buffer))
+    sl = esNumeroValido(slRes) ? slRes : currentPrice + 2 * currentATR
+    const minTP = currentPrice - 1.2 * (sl - currentPrice)
+    const support = supports.filter((s) => s < minTP).sort((a, b) => b - a)[0]
+    tp = esNumeroValido(support) ? support : minTP
   }
 
   if (!esNumeroValido(tp) || !esNumeroValido(sl)) return null
 
-  // --- Paso 8: Cálculo de RR real ---
-  const entryPrice = (entryZone.min + entryZone.max) / 2
+  if ((direction === 'LONG' && (tp <= currentPrice || sl >= currentPrice)) || (direction === 'SHORT' && (tp >= currentPrice || sl <= currentPrice))) return null
+
+  const entryFactor = volatilityRatio > 1.3 ? 0.35 : 0.3
+  const entry_min = currentPrice - entryFactor * currentATR
+  const entry_max = currentPrice + entryFactor * currentATR
+
+  const entryPrice = (entry_min + entry_max) / 2
   const risk = direction === 'LONG' ? entryPrice - sl : sl - entryPrice
   const reward = direction === 'LONG' ? tp - entryPrice : entryPrice - tp
   const rr = (reward / risk).toFixed(2)
@@ -205,8 +175,8 @@ async function multiTimeframeStrategy(symbol, interval = '15m') {
     symbol,
     interval,
     current_price: parseFloat(currentPrice.toFixed(4)),
-    entry_min: parseFloat(entryZone.min.toFixed(4)),
-    entry_max: parseFloat(entryZone.max.toFixed(4)),
+    entry_min: parseFloat(entry_min.toFixed(4)),
+    entry_max: parseFloat(entry_max.toFixed(4)),
     take_profit: parseFloat(tp.toFixed(4)),
     stop_loss: parseFloat(sl.toFixed(4)),
     key_levels: keyLevels.slice(0, 5),
